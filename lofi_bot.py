@@ -57,7 +57,7 @@ async def on_voice_state_update(member, before, after):
                         data = json.loads(text)
                         code = data.get("code", "")
                         link = "https://discord.gg/" + code
-                        msg_payload = {"content": "本日もお疲れ様です☺️\n作業のお供にLofi音楽はいかがですか？☕\n" + link}
+                        msg_payload = {"content": "本日もお疲れ様です☺️\n" + link + "\n作業のお供にLofi音楽はいかがですか？☕"}
                         async with session.post(msg_url, json=msg_payload, headers=headers) as msg_resp:
                             print(f"msg resp: {msg_resp.status}", flush=True)
                     else:
