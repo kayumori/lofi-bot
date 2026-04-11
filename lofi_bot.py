@@ -1,6 +1,8 @@
 import discord
 import aiohttp
 import os
+from aiohttp import web
+import asyncio
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 LOFI_APP_ID = "1051500497355956264"
@@ -21,7 +23,7 @@ async def on_voice_state_update(member, before, after):
             return
 
         channel_id = after.channel.id
-        url = f"{{https://discord.com/api/v10/channels/{channel_id}}}/activities"
+        url = f"https://discord.com/api/v10/channels/{channel_id}/activities"
         headers = {
             "Authorization": f"Bot {BOT_TOKEN}",
             "Content-Type": "application/json"
@@ -35,4 +37,22 @@ async def on_voice_state_update(member, before, after):
                 else:
                     print(f"エラー: {resp.status} - {await resp.text()}")
 
-bot.run(BOT_TOKEN)
+# --- ダミーWebサーバー（Renderのポートチェック用） ---
+async def health(request):
+    return web.Response(text="Bot is running!")
+
+async def start():
+    # Webサーバー起動
+    app = web.Application()
+    app.router.add_get("/", health)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 10000))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    print(f"Webサーバー起動: ポート {port}")
+
+    # Bot起動
+    await bot.start(BOT_TOKEN)
+
+asyncio.run(start())
