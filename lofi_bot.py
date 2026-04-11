@@ -13,6 +13,7 @@ LOFI_APP_ID = "1230610135274225734"
 
 intents = discord.Intents.default()
 intents.voice_states = True
+intents.guilds = True
 bot = discord.Client(intents=intents)
 
 activity_running = False
@@ -26,30 +27,41 @@ async def on_ready():
 @bot.event
 async def on_voice_state_update(member, before, after):
     global activity_running
-    print(f"VC変化検知: {member} before={before.channel} after={after.channel}", flush=True)
+    print(f"VC変化検知: {member}", flush=True)
 
     if before.channel is None and after.channel is not None:
         if after.channel.id != TARGET_CHANNEL_ID:
-            print("対象外チャンネル、スキップ", flush=True)
             return
         if activity_running:
             print("Activity はすでに起動中、スキップ", flush=True)
             return
 
         channel_id = after.channel.id
-        url = f"https://discord.com/api/v10/channels/{channel_id}/invites"
+        url = f"{{https://discord.com/api/v10/channels/{channel_id}}}/invites"
         headers = {"Authorization": f"Bot {BOT_TOKEN}", "Content-Type": "application/json"}
-        payload = {"max_age": 0, "target_type": 2, "target_application_id": LOFI_APP_ID}
+        payload = {"max_age": 86400, "target_type": 2, "target_application_id": LOFI_APP_ID}
 
-        print(f"Activity起動リクエスト送信中...", flush=True)
+        print("Activity招待作成中...", flush=True)
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, json=payload, headers=headers) as resp:
-                    text = await resp.text()
-                    print(f"APIレスポンス: {resp.status} - {text}", flush=True)
                     if resp.status == 200:
+                        data = await resp.json()
+                        invite_code = data.get("code", "")
+                        invite_url = f"{{https://discord.gg/{invite_code}}}"
+                        print(f"Invite作成成功: {invite_url}", flush=True)
                         activity_running = True
-                        print("Lofi Activity 起動成功!", flush=True)
+
+                        # VCのテキストチャットに招待リンクを送信
+                        vc_channel = bot.get_channel(TARGET_CHANNEL_ID)
+                        if vc_channel:
+                            msg_url = f"{{https://discord.com/api/v10/channels/{channel_id}}}/messages"
+                            msg_payload = {"content": f"🎶 **Lofi BGM** を起動するよ！\n▶️ ここをクリックして参加: {invite_url}"}
+                            async with session.post(msg_url, json=msg_payload, headers=headers) as msg_resp:
+                                print(f"メッセージ送信: {msg_resp.status}", flush=True)
+                    else:
+                        text = await resp.text()
+                        print(f"エラー: {resp.status} - {text}", flush=True)
         except Exception as e:
             print(f"APIエラー: {e}", flush=True)
             traceback.print_exc()
