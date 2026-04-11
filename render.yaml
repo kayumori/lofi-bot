@@ -1,0 +1,9 @@
+services:
+  - type: worker
+    name: lofi-bot
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python lofi_bot.py
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
