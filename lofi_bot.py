@@ -19,7 +19,7 @@ intents.guilds = True
 bot = discord.Client(intents=intents)
 
 activity_running = False
-processing = False
+invite_lock = asyncio.Lock()
 
 
 @bot.event
@@ -39,42 +39,43 @@ async def on_disconnect():
 
 @bot.event
 async def on_voice_state_update(member, before, after):
-    global activity_running, processing
+    global activity_running
 
     if before.channel is None and after.channel is not None:
         if after.channel.id != TARGET_CHANNEL_ID:
             return
-        if activity_running or processing:
-            return
 
-        processing = True
-        channel_id = after.channel.id
-        invite_url = API_BASE + "/channels/" + str(channel_id) + "/invites"
-        headers = {"Authorization": "Bot " + BOT_TOKEN, "Content-Type": "application/json"}
-        payload = {"max_age": 86400, "target_type": 2, "target_application_id": LOFI_APP_ID}
+        async with invite_lock:
+            if activity_running:
+                return
+            activity_running = True
 
-        print("creating invite...", flush=True)
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(invite_url, json=payload, headers=headers) as resp:
-                    text = await resp.text()
-                    print(f"invite resp: {resp.status}", flush=True)
-                    if resp.status == 200:
-                        activity_running = True
-                        data = json.loads(text)
-                        code = data.get("code", "")
-                        link = "https://discord.gg/" + code
-                        msg_url = API_BASE + "/channels/" + str(channel_id) + "/messages"
-                        msg_payload = {"content": "\u672c\u65e5\u3082\u304a\u75b2\u308c\u69d8\u3067\u3059\u263a\ufe0f\n" + link + "\n\u4f5c\u696d\u306e\u304a\u4f9b\u306bLofi\u97f3\u697d\u306f\u3044\u304b\u304c\u3067\u3059\u304b\uff1f\u2615"}
-                        async with session.post(msg_url, json=msg_payload, headers=headers) as msg_resp:
-                            print(f"msg resp: {msg_resp.status}", flush=True)
-                    else:
-                        print(f"error: {resp.status} {text}", flush=True)
-        except Exception as e:
-            print(f"err: {e}", flush=True)
-            traceback.print_exc()
-        finally:
-            processing = False
+            channel_id = after.channel.id
+            invite_url = API_BASE + "/channels/" + str(channel_id) + "/invites"
+            headers = {"Authorization": "Bot " + BOT_TOKEN, "Content-Type": "application/json"}
+            payload = {"max_age": 86400, "target_type": 2, "target_application_id": LOFI_APP_ID}
+
+            print("creating invite...", flush=True)
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(invite_url, json=payload, headers=headers) as resp:
+                        text = await resp.text()
+                        print(f"invite resp: {resp.status}", flush=True)
+                        if resp.status == 200:
+                            data = json.loads(text)
+                            code = data.get("code", "")
+                            link = "https://discord.gg/" + code
+                            msg_url = API_BASE + "/channels/" + str(channel_id) + "/messages"
+                            msg_payload = {"content": "\u672c\u65e5\u3082\u304a\u75b2\u308c\u69d8\u3067\u3059\u263a\ufe0f\n" + link + "\n\u4f5c\u696d\u306e\u304a\u4f9b\u306bLofi\u97f3\u697d\u306f\u3044\u304b\u304c\u3067\u3059\u304b\uff1f\u2615"}
+                            async with session.post(msg_url, json=msg_payload, headers=headers) as msg_resp:
+                                print(f"msg resp: {msg_resp.status}", flush=True)
+                        else:
+                            activity_running = False
+                            print(f"error: {resp.status} {text}", flush=True)
+            except Exception as e:
+                activity_running = False
+                print(f"err: {e}", flush=True)
+                traceback.print_exc()
 
     if before.channel is not None and before.channel.id == TARGET_CHANNEL_ID:
         vc = bot.get_channel(TARGET_CHANNEL_ID)
