@@ -5,7 +5,6 @@ import traceback
 from aiohttp import web
 import asyncio
 import json
-import time
 
 print("start", flush=True)
 
@@ -20,6 +19,7 @@ intents.guilds = True
 bot = discord.Client(intents=intents)
 
 activity_running = False
+processing = False
 
 
 @bot.event
@@ -34,21 +34,20 @@ async def on_resumed():
 
 @bot.event
 async def on_disconnect():
-    print("Bot disconnected, will auto-reconnect...", flush=True)
+    print("Bot disconnected...", flush=True)
 
 
 @bot.event
 async def on_voice_state_update(member, before, after):
-    global activity_running
-    print(f"VC: {member}", flush=True)
+    global activity_running, processing
 
     if before.channel is None and after.channel is not None:
         if after.channel.id != TARGET_CHANNEL_ID:
             return
-        if activity_running:
-            print("already running", flush=True)
+        if activity_running or processing:
             return
 
+        processing = True
         channel_id = after.channel.id
         invite_url = API_BASE + "/channels/" + str(channel_id) + "/invites"
         headers = {"Authorization": "Bot " + BOT_TOKEN, "Content-Type": "application/json"}
@@ -62,11 +61,10 @@ async def on_voice_state_update(member, before, after):
                     print(f"invite resp: {resp.status}", flush=True)
                     if resp.status == 200:
                         activity_running = True
-                        print("Lofi started!", flush=True)
-                        msg_url = API_BASE + "/channels/" + str(channel_id) + "/messages"
                         data = json.loads(text)
                         code = data.get("code", "")
                         link = "https://discord.gg/" + code
+                        msg_url = API_BASE + "/channels/" + str(channel_id) + "/messages"
                         msg_payload = {"content": "\u672c\u65e5\u3082\u304a\u75b2\u308c\u69d8\u3067\u3059\u263a\ufe0f\n" + link + "\n\u4f5c\u696d\u306e\u304a\u4f9b\u306bLofi\u97f3\u697d\u306f\u3044\u304b\u304c\u3067\u3059\u304b\uff1f\u2615"}
                         async with session.post(msg_url, json=msg_payload, headers=headers) as msg_resp:
                             print(f"msg resp: {msg_resp.status}", flush=True)
@@ -75,6 +73,8 @@ async def on_voice_state_update(member, before, after):
         except Exception as e:
             print(f"err: {e}", flush=True)
             traceback.print_exc()
+        finally:
+            processing = False
 
     if before.channel is not None and before.channel.id == TARGET_CHANNEL_ID:
         vc = bot.get_channel(TARGET_CHANNEL_ID)
